@@ -1,8 +1,9 @@
 import os
+import time
 import asyncio
 import requests
 from dotenv import load_dotenv
-from fastapi import FastAPI, WebSocket
+from fastapi import FastAPI, WebSocket, HTTPException
 
 app = FastAPI()
 
@@ -12,8 +13,31 @@ load_dotenv()
 API_KEY = os.getenv("ALPHA_VANTAGE_API_KEY")
 API_URL = "https://www.alphavantage.co/query"
 
+# Rate-limiting
+last_request_time = 0
+rate_limit_interval = 60  # in seconds (1 minute)
+
+# Cache dictionary to store stock prices
+stock_cache = {}
+cache_timeout = 30  # Cache timeout in seconds
+
 # Function to fetch stock price from Alpha Vantage
 def get_stock_price(symbol: str):
+    global last_request_time
+    
+    # Check if it's been enough time since the last request
+    current_time = time.time()
+    if current_time - last_request_time < rate_limit_interval:
+        raise HTTPException(status_code=429, detail="Too many requests, please try again later.")
+    
+    last_request_time = current_time
+
+    # Check if the stock price is already cached and if it's still valid
+    if symbol in stock_cache:
+        cached_data = stock_cache[symbol]
+        if current_time - cached_data["timestamp"] < cache_timeout:
+            return cached_data["price"]
+
     params = {
         "function": "TIME_SERIES_INTRADAY",
         "symbol": symbol,
@@ -27,9 +51,14 @@ def get_stock_price(symbol: str):
     try:
         latest_time = list(data["Time Series (5min)"].keys())[0]
         price = data["Time Series (5min)"][latest_time]["4. close"]
+        # Cache the stock price with timestamp
+        stock_cache[symbol] = {
+            "price": float(price),
+            "timestamp": current_time
+        }
         return float(price)
     except KeyError:
-        return None
+        raise HTTPException(status_code=500, detail="Failed to fetch stock price data")
     
 # WebSocket connection handler
 @app.websocket("/ws")
