@@ -4,6 +4,7 @@ import asyncio
 import requests
 from dotenv import load_dotenv
 from fastapi import FastAPI, WebSocket, HTTPException
+from fastapi.websockets import WebSocketState
 
 app = FastAPI()
 
@@ -58,6 +59,7 @@ def get_stock_price(symbol: str):
         }
         return float(price)
     except KeyError:
+        print("Error fetching data:", data)
         raise HTTPException(status_code=500, detail="Failed to fetch stock price data")
     
 # WebSocket connection handler
@@ -65,14 +67,21 @@ def get_stock_price(symbol: str):
 async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
     try:
-        while True:
+        while websocket.client_state == WebSocketState.CONNECTED:
             stock_price = get_stock_price("AAPL")  # Example for Apple stock
             if stock_price:
-                await websocket.send_json({"ticker": "AAPL", "price": round(stock_price, 2)})
+                try:
+                    await websocket.send_json({"ticker": "AAPL", "price": round(stock_price, 2)})
+                    print("Sent stock price to WebSocket")
+                except Exception as send_error:
+                    print("Error sending stock price:", send_error)
             else:
                 await websocket.send_json({"error": "Failed to fetch stock price"})
             await asyncio.sleep(5)
     except Exception as e:
         print("WebSocket error:", e)
+    finally:
+        print("Closing WebSocket connection")
+        await websocket.close()
 
 # Run the server: uvicorn main:app --reload
