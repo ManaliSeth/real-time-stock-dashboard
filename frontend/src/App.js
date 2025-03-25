@@ -1,5 +1,8 @@
 import React, { useState, useEffect } from "react";
+import { ToastContainer, toast } from "react-toastify";
 import StockCard from "./components/StockCard";
+import { RingLoader } from 'react-spinners';
+import 'react-toastify/dist/ReactToastify.css';
 import './App.css';
 
 // Connect to WebSocket server
@@ -7,10 +10,10 @@ const socketUrl = "ws://localhost:8000/ws";
 
 const App = () => {
   const [stockData, setStockData] = useState([]);
-  const [tickers, setTickers] = useState("");  // Store the user's input tickers
+  const [tickers, setTickers] = useState("");
   const [socket, setSocket] = useState(null);
-  const [isLoading, setIsLoading] = useState(true);  // For loading state
-  const [isConnected, setIsConnected] = useState(false);  // Track WebSocket connection status
+  const [isLoading, setIsLoading] = useState(true);
+  const [isConnected, setIsConnected] = useState(false);
 
   // Handle stock data updates from the WebSocket
   useEffect(() => {
@@ -31,29 +34,10 @@ const App = () => {
         console.log("Parsed data from WebSocket:", data);
     
         if (data.stocks && Array.isArray(data.stocks)) {
-          console.log("Received stocks:", data.stocks);
-
-          // Compare current stock data with previous to avoid unnecessary updates
-          setStockData((prevData) => {
-            const updatedData = data.stocks.filter((newStock) => {
-              // Update only if price is different or new stock
-              const existingStock = prevData.find(stock => stock.ticker === newStock.ticker);
-              return !existingStock || existingStock.price !== newStock.price;
-            });
-            
-            if (updatedData.length > 0) {
-              console.log("Updating state with new stock data:", updatedData);
-            }
-
-            // Append the new data or modify existing stocks
-            const mergedData = [
-              ...prevData.filter(stock => !updatedData.some(newStock => newStock.ticker === stock.ticker)),
-              ...updatedData
-            ];
-    
-            return mergedData;
-          });
-    
+          setStockData(data.stocks);
+          setIsLoading(false);
+        } else if (data.error) {
+          toast.error(data.error);
           setIsLoading(false);
         } else {
           console.log("Unexpected data format:", data);
@@ -84,17 +68,12 @@ const App = () => {
   // Send ticker data to WebSocket
   const handleTickerSubmit = () => {
     if (tickers.trim() && socket && isConnected) {
-      // Only send message if WebSocket is connected
       setIsLoading(true);
-
-      const tickerArray = tickers.split(",").map(ticker => ticker.trim());
-      socket.send(JSON.stringify(tickerArray));
-      socket.send(tickers);
-
-      console.log("Sent tickers to WebSocket:", tickers);
-      setTickers("");
+      socket.send(tickers.trim());
+      setTickers("");  // Clear the input field
+      console.log("Sent ticker:", tickers.trim());
     } else {
-      console.error("WebSocket is not open or invalid tickers");
+      toast.error("Please provide a valid ticker and ensure the WebSocket is connected.");
     }
   };
 
@@ -107,25 +86,31 @@ const App = () => {
           type="text"
           value={tickers}
           onChange={(e) => setTickers(e.target.value)}
-          placeholder="Enter stock tickers (comma separated)"
+          placeholder="Enter a single stock ticker"
         />
-        <button className="submit-btn" onClick={handleTickerSubmit}>
-          Track Stocks
+        <button
+          className="submit-btn"
+          onClick={handleTickerSubmit}
+          disabled={!tickers.trim() || tickers.includes(",")}
+        >
+          Track Stock
         </button>
       </div>
 
       {isLoading ? (
-        <p>Loading Stocks Data...</p>
+        <div className="loader-container">
+          <RingLoader size={50} color="#4b9cd3" loading={isLoading} />
+        </div>
       ) : (
         stockData.length > 0 ? (
-          stockData.map(({ ticker, price }) => (
-            <StockCard key={ticker} ticker={ticker} price={price} />
-          ))
+          <StockCard ticker={stockData[0].ticker} price={stockData[0].price} />
         ) : (
           <p>No stock data available.</p>
         )
       )}
 
+      {/* Toast notifications container */}
+      <ToastContainer position="top-right" autoClose={5000} hideProgressBar={false} newestOnTop closeButton />
     </div>
   );
 };
