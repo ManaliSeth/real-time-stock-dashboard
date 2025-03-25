@@ -14,24 +14,15 @@ load_dotenv()
 API_KEY = os.getenv("ALPHA_VANTAGE_API_KEY")
 API_URL = "https://www.alphavantage.co/query"
 
-# Rate-limiting
-last_request_time = 0
-rate_limit_interval = 60  # in seconds (1 minute)
-
 # Cache dictionary to store stock prices
 stock_cache = {}
-cache_timeout = 30  # Cache timeout in seconds
+cache_timeout = 3000  # Cache timeout in seconds
 
 # Function to fetch stock price from Alpha Vantage
 def get_stock_price(symbol: str):
     global last_request_time
     
-    # Check if it's been enough time since the last request
     current_time = time.time()
-    if current_time - last_request_time < rate_limit_interval:
-        raise HTTPException(status_code=429, detail="Too many requests, please try again later.")
-    
-    last_request_time = current_time
 
     # Check if the stock price is already cached and if it's still valid
     if symbol in stock_cache:
@@ -60,23 +51,39 @@ def get_stock_price(symbol: str):
         return float(price)
     except KeyError:
         print("Error fetching data:", data)
-        raise HTTPException(status_code=500, detail="Failed to fetch stock price data")
+        return None
     
 # WebSocket connection handler
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
     try:
+        requested_tickers = []  # List of tickers that the client wants to track
+
         while websocket.client_state == WebSocketState.CONNECTED:
-            stock_price = get_stock_price("AAPL")  # Example for Apple stock
-            if stock_price:
-                try:
-                    await websocket.send_json({"ticker": "AAPL", "price": round(stock_price, 2)})
-                    print("Sent stock price to WebSocket")
-                except Exception as send_error:
-                    print("Error sending stock price:", send_error)
-            else:
-                await websocket.send_json({"error": "Failed to fetch stock price"})
+            data = await websocket.receive_text()  # Receive ticker data from the client
+            print("Received tickers from client:", data)
+            
+            if data: 
+                requested_tickers = data.split(",") 
+                print("Requested tickers:", requested_tickers)
+
+            # Fetch stock data for each requested ticker
+            stock_data = []
+            for ticker in requested_tickers:
+                ticker = ticker.strip()
+                price = get_stock_price(ticker)
+
+                if price is not None:
+                    stock_data.append({"ticker": ticker, "price": round(price, 2)})
+            
+            # Log data before sending to client
+            print("Sending stock data to WebSocket:", stock_data)
+
+            if stock_data:
+                await websocket.send_json({"stocks": stock_data})
+                print("Sent stock prices to WebSocket:", stock_data)
+
             await asyncio.sleep(5)
     except Exception as e:
         print("WebSocket error:", e)
