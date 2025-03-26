@@ -82,10 +82,37 @@ body {
   margin: 0;
 }
 
+.price-container {
+  display: flex;
+  align-items: center; /* Align price and percentage in the same line */
+  justify-content: center;
+  gap: 10px; /* Space between price and change */
+}
+
 .price {
+  font-size: 1.5rem;
+  font-weight: bold;
+  color: black; /* Price stays black */
+}
+
+.change {
   font-size: 1.2rem;
   font-weight: bold;
-  color: #4CAF50;
+}
+
+.positive {
+  color: green; /* Green for positive change */
+}
+
+.negative {
+  color: red; /* Red for negative change */
+}
+
+.stock-container {
+  display: flex;
+  justify-content: center;
+  gap: 20px;
+  flex-wrap: wrap;
 }
 
 .loader-container {
@@ -106,23 +133,22 @@ body {
   font-size: 1rem;
 }
 
-.Toastify__toast-body {
-  color: black !important;
-}
-
 .Toastify__toast--error {
   background-color: #d75046; 
-  
+  color: black;
 }
 
 .Toastify__toast--success {
   background-color: #4caf50; 
+  color: black;
 }
 
 .Toastify__toast--info {
   background-color: #74b2e6; 
+  color: black;
 }
 
 .Toastify__toast--warning {
   background-color: #ff9800;
+  color: black;
 }

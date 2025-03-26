@@ -1,10 +1,19 @@
-import React from 'react';
+import React from "react";
 
-const StockCard = ({ ticker, price }) => {
+const StockCard = ({ ticker, price, change_percent, direction }) => {
+  const isPositive = direction === "up";
+  const isNegative = direction === "down";
+  const arrow = isPositive ? "▲" : isNegative ? "▼" : "—";
+
   return (
     <div className="stock-card">
       <h2>{ticker}</h2>
-      <p className="price">${price}</p>
+      <div className="price-container">
+        <span className="price">${price.toFixed(2)}</span>
+        <span className={`change ${isPositive ? "positive" : isNegative ? "negative" : ""}`}>
+          {arrow} {change_percent.toFixed(2)}%
+        </span>
+      </div>
     </div>
   );
 };

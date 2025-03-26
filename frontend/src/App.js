@@ -34,12 +34,37 @@ const App = () => {
         console.log("Parsed data from WebSocket:", data);
     
         if (data.stocks && Array.isArray(data.stocks)) {
-          setStockData(data.stocks);
+          // setStockData(data.stocks);
+          setStockData((prevData) => {
+            return data.stocks.map((latestStock) => {
+              const existingStock = prevData.find(stock => stock.ticker === latestStock.ticker);
+              
+              if (existingStock) {
+                // Calculate percentage change
+                const priceChange = latestStock.price - existingStock.price;
+                const changePercent = (priceChange / existingStock.price) * 100;
+                const direction = priceChange > 0 ? "up" : priceChange < 0 ? "down" : "neutral";
+
+                return { 
+                  ...latestStock, 
+                  change_percent: changePercent, 
+                  direction: direction 
+                };
+              } else {
+                return { 
+                  ...latestStock, 
+                  change_percent: 0, 
+                  direction: "neutral" 
+                };
+              }
+            });
+          });
           setIsLoading(false);
         } else if (data.error) {
           toast.error(data.error);
           setIsLoading(false);
-        } else {
+        } 
+        else {
           console.log("Unexpected data format:", data);
         }
       } catch (error) {
@@ -69,9 +94,9 @@ const App = () => {
   const handleTickerSubmit = () => {
     if (tickers.trim() && socket && isConnected) {
       setIsLoading(true);
-      socket.send(tickers.trim());
-      setTickers("");  // Clear the input field
-      console.log("Sent ticker:", tickers.trim());
+      socket.send(tickers.trim().toUpperCase());
+      setTickers("");
+      console.log("Sent ticker:", tickers.trim().toUpperCase());
     } else {
       toast.error("Please provide a valid ticker and ensure the WebSocket is connected.");
     }
@@ -86,7 +111,7 @@ const App = () => {
           type="text"
           value={tickers}
           onChange={(e) => setTickers(e.target.value)}
-          placeholder="Enter a single stock ticker"
+          placeholder="Enter a single stock ticker (e.g., AAPL)"
         />
         <button
           className="submit-btn"
@@ -103,7 +128,17 @@ const App = () => {
         </div>
       ) : (
         stockData.length > 0 ? (
-          <StockCard ticker={stockData[0].ticker} price={stockData[0].price} />
+          <div className="stock-container">
+            {stockData.map((stock) => (
+              <StockCard
+                key={stock.ticker}
+                ticker={stock.ticker}
+                price={stock.price}
+                change_percent={stock.change_percent}
+                direction={stock.direction}
+              />
+          ))}
+        </div>
         ) : (
           <p>No stock data available.</p>
         )

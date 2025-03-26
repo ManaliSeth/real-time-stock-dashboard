@@ -57,24 +57,37 @@ def get_stock_price(symbol: str):
 async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
     try:
-        while websocket.client_state == WebSocketState.CONNECTED:
-            data = await websocket.receive_text()  # Receive ticker data from the client
-            print("Received ticker from client:", data)
-            
-            if data: 
-                requested_ticker = data.strip()
-                print("Requested ticker:", requested_ticker)
-            
+        ticker = await websocket.receive_text()  # Receive ticker data from the client
+        print("Tracking ticker:", ticker)
+        
+        if ticker: 
+            requested_ticker = ticker.strip()
+            print("Requested ticker:", requested_ticker)
+        
+            while websocket.client_state == WebSocketState.CONNECTED:
                 price = get_stock_price(requested_ticker)
-            
                 if price is not None:
-                    stock_data = [{"ticker": requested_ticker, "price": round(price, 2)}]
-                    await websocket.send_json({"stocks": stock_data})
-                    print("Sent stock prices to WebSocket:", stock_data)
+                    if requested_ticker in stock_cache:
+                        prev_price = stock_cache[requested_ticker].get("price", None)
+                        change_percent = ((price - prev_price) / prev_price) * 100 if prev_price else 0
+                        direction = "up" if change_percent > 0 else "down" if change_percent < 0 else "neutral"
+                    else:
+                        change_percent = 0
+                        direction = "neutral"
+
+                    stock_data = {
+                        "ticker": requested_ticker,
+                        "price": round(price, 2),
+                        "change_percent": round(change_percent, 2),
+                        "direction": direction
+                    }
+        
+                    await websocket.send_json({"stocks": [stock_data]})
+                    print("Sent stock prices to WebSocket:", [stock_data])
                 else:
                     await websocket.send_json({"error": "Could not fetch stock data for the provided ticker."})
 
-            await asyncio.sleep(5)
+                await asyncio.sleep(5) # Update every 5 sec
     except Exception as e:
         print("WebSocket error:", e)
     finally:
