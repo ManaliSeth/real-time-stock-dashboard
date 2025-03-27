@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { ToastContainer, toast } from "react-toastify";
 import StockCard from "./components/StockCard";
 import { RingLoader } from 'react-spinners';
@@ -14,6 +14,10 @@ const App = () => {
   const [socket, setSocket] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isConnected, setIsConnected] = useState(false);
+  const [searchResults, setSearchResults] = useState([]);
+  const [selectedTicker, setSelectedTicker] = useState("");
+  const searchTimeoutRef = useRef(null);
+  const [isTyping, setIsTyping] = useState(false);
 
   // Handle stock data updates from the WebSocket
   useEffect(() => {
@@ -34,30 +38,15 @@ const App = () => {
         console.log("Parsed data from WebSocket:", data);
     
         if (data.stocks && Array.isArray(data.stocks)) {
-          // setStockData(data.stocks);
           setStockData((prevData) => {
-            return data.stocks.map((latestStock) => {
+            const updatedStocks = data.stocks.map((latestStock) => {
               const existingStock = prevData.find(stock => stock.ticker === latestStock.ticker);
-              
-              if (existingStock) {
-                // Calculate percentage change
-                const priceChange = latestStock.price - existingStock.price;
-                const changePercent = (priceChange / existingStock.price) * 100;
-                const direction = priceChange > 0 ? "up" : priceChange < 0 ? "down" : "neutral";
 
-                return { 
-                  ...latestStock, 
-                  change_percent: changePercent, 
-                  direction: direction 
-                };
-              } else {
-                return { 
-                  ...latestStock, 
-                  change_percent: 0, 
-                  direction: "neutral" 
-                };
-              }
+              return existingStock
+                ? { ...latestStock, change_percent: latestStock.change_percent, direction: latestStock.direction }
+                : latestStock;
             });
+            return updatedStocks;
           });
           setIsLoading(false);
         } else if (data.error) {
@@ -77,12 +66,9 @@ const App = () => {
       setIsLoading(false);
     };
 
-    ws.onclose = () => {
-      console.log("WebSocket disconnected. Attempting to reconnect...");
-      setIsConnected(false);
-      setTimeout(() => {
-        setSocket(new WebSocket(socketUrl)); // Reconnect with a new WebSocket
-      }, 5000); // Retry connection after 5 seconds
+    ws.onclose = (event) => {
+      console.log("WebSocket disconnected:", event);
+    setIsConnected(false);
     };
 
     return () => {
@@ -90,14 +76,58 @@ const App = () => {
     };
   }, []);
 
+  // Handle change in ticker input
+  const handleSearchChange = useCallback((e) => {
+    const query = e.target.value;
+    setTickers(query);
+    setIsTyping(true);
+
+    if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+    
+    if (query.length > 1) {
+      searchTimeoutRef.current = setTimeout(async () => {
+        try {
+          const response = await fetch(`http://localhost:8000/search?query=${query}`);
+          const data = await response.json();
+          console.log("Search results:", data.results); // Debugging
+          setSearchResults(data.results);
+        } catch (error) {
+          console.error("Error fetching search results:", error);
+        }
+      },1000); // 1000ms debounce time
+    } else {
+      setSearchResults([]);
+    }
+  }, []);
+
+  // Handle ticker selection from autosuggest
+  const handleSelectTicker = (ticker) => {
+    setSelectedTicker(ticker);
+    setTickers(ticker); 
+    setSearchResults([]);
+    setIsTyping(false);
+  };
+
   // Send ticker data to WebSocket
   const handleTickerSubmit = () => {
-    if (tickers.trim() && socket && isConnected) {
+    if (selectedTicker && socket && isConnected) {
       setIsLoading(true);
-      socket.send(tickers.trim().toUpperCase());
+      socket.send(selectedTicker.toUpperCase());
+      setSelectedTicker(null);
       setTickers("");
-      console.log("Sent ticker:", tickers.trim().toUpperCase());
-    } else {
+      setSearchResults([]);
+      console.log("Sent ticker:", selectedTicker.toUpperCase());
+    } else if (!selectedTicker && tickers.trim()) {
+      const typedTicker = tickers.toUpperCase().trim();
+      if (typedTicker) {
+        setIsLoading(true);
+        socket.send(typedTicker);
+        setTickers("");
+        setSearchResults([]);
+        console.log("Sent ticker (typed):", typedTicker);
+      }
+    } 
+    else {
       toast.error("Please provide a valid ticker and ensure the WebSocket is connected.");
     }
   };
@@ -110,13 +140,27 @@ const App = () => {
           className="ticker-input"
           type="text"
           value={tickers}
-          onChange={(e) => setTickers(e.target.value)}
-          placeholder="Enter a single stock ticker (e.g., AAPL)"
+          onChange={handleSearchChange}
+          placeholder="Search stock by ticker (e.g., AAPL)"
         />
+        {searchResults.length > 0 && !isTyping && (
+          <div className="search-suggestions">
+            {searchResults.map((result) => (
+              <div
+                key={result.symbol}
+                className="suggestion-item"
+                onClick={() => handleSelectTicker(result.symbol)}
+              >
+                <div className="suggestion-symbol">{result.symbol}</div>
+                <div className="suggestion-name">{result.name}</div>
+              </div>
+            ))}
+          </div>
+        )}
         <button
           className="submit-btn"
           onClick={handleTickerSubmit}
-          disabled={!tickers.trim() || tickers.includes(",")}
+          disabled={!tickers.trim()}
         >
           Track Stock
         </button>
@@ -130,13 +174,7 @@ const App = () => {
         stockData.length > 0 ? (
           <div className="stock-container">
             {stockData.map((stock) => (
-              <StockCard
-                key={stock.ticker}
-                ticker={stock.ticker}
-                price={stock.price}
-                change_percent={stock.change_percent}
-                direction={stock.direction}
-              />
+              <StockCard key={stock.ticker} {...stock} />
           ))}
         </div>
         ) : (
