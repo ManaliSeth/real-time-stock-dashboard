@@ -59,6 +59,9 @@ def fetch_stock_price(symbol: str):
     except requests.exceptions.RequestException as e:
         print(f"Request error: {e}")
         return None
+    except ValueError as ve:
+        print(f"Value error: {e}")
+        return None
     except KeyError as e:
         print(f"Key error: {e}")        
         return None
@@ -130,11 +133,22 @@ async def websocket_endpoint(websocket: WebSocket):
                     direction = "up" if change_percent > 0 else "down" if change_percent < 0 else "neutral"
                     prev_price = price
 
+                    # Fetch additional stock details
+                    stock_details = await get_stock_details(ticker)
+
                     stock_data = {
                         "ticker": ticker,
                         "price": round(price, 2),
                         "change_percent": round(change_percent, 2),
-                        "direction": direction
+                        "direction": direction,
+                        "name": stock_details["name"],
+                        "current_price": stock_details["current_price"],
+                        "open_price": stock_details["open_price"],
+                        "high_price": stock_details["high_price"],
+                        "low_price": stock_details["low_price"],
+                        "market_cap": stock_details["market_cap"],
+                        "pe_ratio": stock_details["pe_ratio"],
+                        "price_history": stock_details["price_history"]
                     }
 
                     await websocket.send_json({"stocks": [stock_data]})
@@ -161,5 +175,46 @@ async def search(query: str):
     if not results:
         return {"message": "No results found"}
     return {"results": results}
+
+# Stock details
+@app.get("/stock-details")
+async def get_stock_details(ticker: str):
+    try:
+        # Fetch stock overview (company info, market cap, P/E ratio)
+        overview_url = f"{API_URL}?function=OVERVIEW&symbol={ticker}&apikey={API_KEY}"
+        overview_response = requests.get(overview_url)
+        overview_data = overview_response.json()
+
+        # Fetch historical stock prices (daily)
+        history_url = f"{API_URL}?function=TIME_SERIES_DAILY&symbol={ticker}&apikey={API_KEY}"
+        history_response = requests.get(history_url)
+        history_data = history_response.json()
+
+        if "Time Series (Daily)" not in history_data or "MarketCapitalization" not in overview_data:
+            raise HTTPException(status_code=404, detail="Stock data not found")
+
+        # Extract relevant details
+        latest_date = list(history_data["Time Series (Daily)"].keys())[0]
+        latest_prices = history_data["Time Series (Daily)"][latest_date]
+
+        stock_details = {
+            "ticker": ticker,
+            "name": overview_data.get("Name", "N/A"),
+            "current_price": latest_prices["4. close"],
+            "open_price": latest_prices["1. open"],
+            "high_price": latest_prices["2. high"],
+            "low_price": latest_prices["3. low"],
+            "market_cap": overview_data.get("MarketCapitalization", "N/A"),
+            "pe_ratio": overview_data.get("PERatio", "N/A"),
+            "price_history": [
+                {"date": date, "price": data["4. close"]}
+                for date, data in list(history_data["Time Series (Daily)"].items())[:10]  # Last 10 days
+            ]
+        }
+
+        return stock_details
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 # Run the server: uvicorn main:app --reload

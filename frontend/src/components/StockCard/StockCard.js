@@ -1,12 +1,12 @@
 import React from "react";
 
-const StockCard = ({ ticker, price, change_percent, direction }) => {
+const StockCard = ({ ticker, price, change_percent, direction, onClick }) => {
   const isPositive = direction === "up";
   const isNegative = direction === "down";
   const arrow = isPositive ? "▲" : isNegative ? "▼" : "—";
 
   return (
-    <div className="stock-card">
+    <div className="stock-card" onClick={() => onClick(ticker)}>
       <h2>{ticker}</h2>
       <div className="price-container">
         <span className="price">${price.toFixed(2)}</span>

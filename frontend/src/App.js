@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { ToastContainer, toast } from "react-toastify";
-import StockCard from "./components/StockCard";
+import StockCard from "./components/StockCard/StockCard";
+import StockDetailModal from "./components/StockDetailModal/StockDetailModal";
 import { RingLoader } from 'react-spinners';
 import 'react-toastify/dist/ReactToastify.css';
 import './App.css';
@@ -19,6 +20,8 @@ const App = () => {
   const searchTimeoutRef = useRef(null);
   const [isTyping, setIsTyping] = useState(false);
   const [isTracking, setIsTracking] = useState(false);
+  const [selectedStock, setSelectedStock] = useState(null);
+  const [isDetailOpen, setIsDetailOpen] = useState(false);
 
   // Handle stock data updates from the WebSocket
   useEffect(() => {
@@ -44,7 +47,7 @@ const App = () => {
               const existingStock = prevData.find(stock => stock.ticker === latestStock.ticker);
 
               return existingStock
-                ? { ...latestStock, change_percent: latestStock.change_percent, direction: latestStock.direction }
+                ? { ...existingStock, ...latestStock }
                 : latestStock;
             });
             return updatedStocks;
@@ -69,8 +72,8 @@ const App = () => {
 
     ws.onclose = (event) => {
       console.log("WebSocket disconnected:", event);
-    setIsConnected(false);
-    setIsTracking(false);
+      setIsConnected(false);
+      setIsTracking(false);
     };
 
     return () => {
@@ -133,6 +136,30 @@ const App = () => {
     }
   };
 
+  // Prevent background scroll when modal is open
+  useEffect(() => {
+    if (selectedStock) {
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "auto";
+    }
+  }, [selectedStock]);
+
+  // Open stock details when clicking a stock card
+  const handleStockClick = (ticker) => {
+    const stockDetails = stockData.find((stock) => stock.ticker === ticker);
+    if (stockDetails) {
+      setSelectedStock(stockDetails);
+      setIsDetailOpen(true);
+    }
+  };
+
+  // Close modal function
+  const handleCloseModal = () => {
+    setIsDetailOpen(false);
+    setSelectedStock(null);
+  };
+
   return (
     <div className="App">
       <h1 className="title">Real-Time Stock Market Dashboard</h1>
@@ -174,12 +201,21 @@ const App = () => {
         stockData.length > 0 ? (
           <div className="stock-container">
             {stockData.map((stock) => (
-              <StockCard key={stock.ticker} {...stock} />
+              <StockCard key={stock.ticker} {...stock} onClick={handleStockClick}/>
           ))}
         </div>
         ) : (
           <p>No stock data available.</p>
         )
+      )}
+
+      {/* Stock Detail Modal */}
+      {isDetailOpen && selectedStock && (
+        <StockDetailModal
+          isOpen={isDetailOpen}
+          onClose={handleCloseModal}
+          stock={selectedStock}
+        />
       )}
 
       {/* Toast notifications container */}

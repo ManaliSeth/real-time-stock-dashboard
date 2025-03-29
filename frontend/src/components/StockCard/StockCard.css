@@ -1,0 +1,56 @@
+/* Stock Card Styling */
+.stock-container {
+    display: flex;
+    justify-content: center;
+    gap: 20px;
+    flex-wrap: wrap;
+  }
+  
+  .stock-card {
+    margin-top: 40px;
+    background-color: #fff;
+    padding: 20px;
+    border-radius: 10px;
+    box-shadow: 0 4px 6px var(--shadow-color);
+    max-width: var(--max-width);
+    margin-left: auto;
+    margin-right: auto;
+  }
+  
+  .stock-card:hover {
+    transform: translateY(-5px);
+  }
+  
+  .stock-card h2 {
+    font-size: 1.5rem;
+    color: var(--neutral-color);
+    margin: 0;
+  }
+  
+  /* Price Container Styling */
+  .price-container {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+  }
+  
+  .price {
+    font-size: 1.5rem;
+    font-weight: bold;
+    color: black;
+  }
+  
+  .change {
+    font-size: 1.2rem;
+    font-weight: bold;
+  }
+  
+  .positive {
+    color: green;
+  }
+  
+  .negative {
+    color: red;
+  }
+  
