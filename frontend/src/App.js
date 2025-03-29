@@ -18,6 +18,7 @@ const App = () => {
   const [selectedTicker, setSelectedTicker] = useState("");
   const searchTimeoutRef = useRef(null);
   const [isTyping, setIsTyping] = useState(false);
+  const [isTracking, setIsTracking] = useState(false);
 
   // Handle stock data updates from the WebSocket
   useEffect(() => {
@@ -69,10 +70,11 @@ const App = () => {
     ws.onclose = (event) => {
       console.log("WebSocket disconnected:", event);
     setIsConnected(false);
+    setIsTracking(false);
     };
 
     return () => {
-      ws.close(); // Cleanup on component unmount
+      ws.close();
     };
   }, []);
 
@@ -81,6 +83,10 @@ const App = () => {
     const query = e.target.value;
     setTickers(query);
     setIsTyping(true);
+
+    if (isTracking) {
+      setIsTracking(false);
+    }
 
     if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
     
@@ -98,7 +104,7 @@ const App = () => {
     } else {
       setSearchResults([]);
     }
-  }, []);
+  }, [isTracking]);
 
   // Handle ticker selection from autosuggest
   const handleSelectTicker = (ticker) => {
@@ -110,24 +116,19 @@ const App = () => {
 
   // Send ticker data to WebSocket
   const handleTickerSubmit = () => {
-    if (selectedTicker && socket && isConnected) {
+    const tickerToSend = selectedTicker || tickers.trim().toUpperCase();
+    
+    if (tickerToSend && socket && isConnected) {
       setIsLoading(true);
-      socket.send(selectedTicker.toUpperCase());
-      setSelectedTicker(null);
-      setTickers("");
+      setStockData([]);
+      socket.send(tickerToSend); 
+      setSelectedTicker(null); 
+      setTickers("");          
       setSearchResults([]);
-      console.log("Sent ticker:", selectedTicker.toUpperCase());
-    } else if (!selectedTicker && tickers.trim()) {
-      const typedTicker = tickers.toUpperCase().trim();
-      if (typedTicker) {
-        setIsLoading(true);
-        socket.send(typedTicker);
-        setTickers("");
-        setSearchResults([]);
-        console.log("Sent ticker (typed):", typedTicker);
-      }
-    } 
-    else {
+      setIsTyping(false);
+      setIsTracking(true);
+      console.log("Sent ticker:", tickerToSend);
+    } else {
       toast.error("Please provide a valid ticker and ensure the WebSocket is connected.");
     }
   };
@@ -143,7 +144,7 @@ const App = () => {
           onChange={handleSearchChange}
           placeholder="Search stock by ticker (e.g., AAPL)"
         />
-        {searchResults.length > 0 && !isTyping && (
+        {searchResults.length > 0 && !isTracking &&(
           <div className="search-suggestions">
             {searchResults.map((result) => (
               <div
@@ -151,8 +152,7 @@ const App = () => {
                 className="suggestion-item"
                 onClick={() => handleSelectTicker(result.symbol)}
               >
-                <div className="suggestion-symbol">{result.symbol}</div>
-                <div className="suggestion-name">{result.name}</div>
+                {result.symbol} - {result.name}
               </div>
             ))}
           </div>
@@ -160,7 +160,7 @@ const App = () => {
         <button
           className="submit-btn"
           onClick={handleTickerSubmit}
-          disabled={!tickers.trim()}
+          disabled={!tickers.trim() || isTracking}
         >
           Track Stock
         </button>

@@ -1,97 +1,165 @@
 import os
-import time
+import json
+import redis
 import asyncio
 import requests
 from dotenv import load_dotenv
 from fastapi import FastAPI, WebSocket, HTTPException
-from fastapi.websockets import WebSocketState
+from fastapi.websockets import WebSocketState, WebSocketDisconnect
+from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI()
 
 load_dotenv()
 
+# Add CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 # Alpha Vantage API key and endpoint
 API_KEY = os.getenv("ALPHA_VANTAGE_API_KEY")
 API_URL = "https://www.alphavantage.co/query"
 
-# Cache dictionary to store stock prices
-stock_cache = {}
-cache_timeout = 3000  # Cache timeout in seconds
+# Redis connection
+def connect_redis():
+    try:
+        redis_client = redis.Redis(host="localhost", port=6379, db=0, decode_responses=True)
+        redis_client.ping()
+        print("Redis connected successfully!")
+        return redis_client
+    except redis.exceptions.ConnectionError:
+        print("Redis connection failed! Falling back to no cache.")
+        return None
 
-# Function to fetch stock price from Alpha Vantage
-def get_stock_price(symbol: str):
-    global last_request_time
-    current_time = time.time()
+redis_client = connect_redis()
 
-    # Check if the stock price is already cached and if it's still valid
-    if symbol in stock_cache:
-        cached_data = stock_cache[symbol]
-        if current_time - cached_data["timestamp"] < cache_timeout:
-            return cached_data["price"]
+CACHE_EXPIRY = 3000  # Cache timeout in seconds
+
+# Fetch stock price from Alpha Vantage
+def fetch_stock_price(symbol: str):
+    try:
+        params = {
+            "function": "TIME_SERIES_INTRADAY",
+            "symbol": symbol,
+            "interval": "5min",
+            "apikey": API_KEY
+        }
+        response = requests.get(API_URL, params=params)
+        response.raise_for_status()
+        data = response.json()
+
+        latest_time = list(data["Time Series (5min)"].keys())[0]
+        price = round(float(data["Time Series (5min)"][latest_time]["4. close"]), 2)
+        return price
+    except requests.exceptions.RequestException as e:
+        print(f"Request error: {e}")
+        return None
+    except KeyError as e:
+        print(f"Key error: {e}")        
+        return None
+
+# Search stock symbols from Alpha Vantage
+def search_stock_symbols(query: str):
+    print(f"Searching for: {query}")  # Debugging
+
+    cache_key = f"search:{query}"
+    if redis_client:
+        cached_results = redis_client.get(cache_key)
+        if cached_results:
+            return json.loads(cached_results)
 
     params = {
-        "function": "TIME_SERIES_INTRADAY",
-        "symbol": symbol,
-        "interval": "5min",
+        "function": "SYMBOL_SEARCH",
+        "keywords": query,
         "apikey": API_KEY
     }
     response = requests.get(API_URL, params=params)
     data = response.json()
 
-    # Check for valid data and extract the latest price
+    print("Alpha Vantage API Response:", data)  # Debugging
+
+    # Return a list of matching symbols and names
     try:
-        latest_time = list(data["Time Series (5min)"].keys())[0]
-        price = data["Time Series (5min)"][latest_time]["4. close"]
-        # Cache the stock price with timestamp
-        stock_cache[symbol] = {
-            "price": float(price),
-            "timestamp": current_time
-        }
-        return float(price)
-    except KeyError:
-        print("Error fetching data:", data)
-        return None
-    
-# WebSocket connection handler
+        matches = data.get("bestMatches", [])
+        results = [{"symbol": match["1. symbol"], "name": match["2. name"], "exchange": match["4. region"]} for match in matches]
+
+        # Cache results
+        if redis_client:
+            redis_client.setex(cache_key, CACHE_EXPIRY, json.dumps(results))
+
+        return results
+    except KeyError as e:
+        print(f"Key error while processing symbol search: {e}")
+        return []
+    except json.JSONDecodeError as e:
+        print(f"Error decoding JSON response: {e}")
+        return []
+
+# WebSocket connection handler with batch requests
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
+    ticker = None
+    prev_price = None
+
     try:
-        ticker = await websocket.receive_text()  # Receive ticker data from the client
-        print("Tracking ticker:", ticker)
-        
-        if ticker: 
-            requested_ticker = ticker.strip()
-            print("Requested ticker:", requested_ticker)
-        
-            while websocket.client_state == WebSocketState.CONNECTED:
-                price = get_stock_price(requested_ticker)
-                if price is not None:
-                    if requested_ticker in stock_cache:
-                        prev_price = stock_cache[requested_ticker].get("price", None)
-                        change_percent = ((price - prev_price) / prev_price) * 100 if prev_price else 0
-                        direction = "up" if change_percent > 0 else "down" if change_percent < 0 else "neutral"
-                    else:
-                        change_percent = 0
-                        direction = "neutral"
+        while websocket.client_state == WebSocketState.CONNECTED:
+            try:
+                new_ticker = await asyncio.wait_for(websocket.receive_text(), timeout=1)
+                new_ticker = new_ticker.strip().upper()
+
+                if new_ticker != ticker:
+                    ticker = new_ticker 
+                    prev_price = None
+                    print(f"Tracking ticker: {ticker}")
+
+            except asyncio.TimeoutError:
+                pass
+
+            # Fetch stock price for the current ticker
+            if ticker:
+                price = fetch_stock_price(ticker)
+
+                if price:
+                    change_percent = ((price - prev_price) / prev_price) * 100 if prev_price else 0
+                    direction = "up" if change_percent > 0 else "down" if change_percent < 0 else "neutral"
+                    prev_price = price
 
                     stock_data = {
-                        "ticker": requested_ticker,
+                        "ticker": ticker,
                         "price": round(price, 2),
                         "change_percent": round(change_percent, 2),
                         "direction": direction
                     }
-        
+
                     await websocket.send_json({"stocks": [stock_data]})
                     print("Sent stock prices to WebSocket:", [stock_data])
                 else:
                     await websocket.send_json({"error": "Could not fetch stock data for the provided ticker."})
 
-                await asyncio.sleep(5) # Update every 5 sec
-    except Exception as e:
-        print("WebSocket error:", e)
-    finally:
-        print("Closing WebSocket connection")
+                await asyncio.sleep(5)  # Update every 5 seconds
+    except WebSocketDisconnect:
+        print("WebSocket disconnected")
         await websocket.close()
+    except Exception as e:
+        print(f"Error: {e}")
+        await websocket.close()
+
+# Search Autosuggest
+@app.get("/search")
+async def search(query: str):
+    if not query:
+        raise HTTPException(status_code=400, detail="Search query is required.")
+    
+    # Search stock symbols based on the query
+    results = search_stock_symbols(query)
+    if not results:
+        return {"message": "No results found"}
+    return {"results": results}
 
 # Run the server: uvicorn main:app --reload
