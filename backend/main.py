@@ -108,7 +108,7 @@ def search_stock_symbols(query: str):
 async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
     ticker = None
-    prev_price = None
+    prev_intraday_price = None
 
     try:
         while websocket.client_state == WebSocketState.CONNECTED:
@@ -118,7 +118,7 @@ async def websocket_endpoint(websocket: WebSocket):
 
                 if new_ticker != ticker:
                     ticker = new_ticker 
-                    prev_price = None
+                    prev_intraday_price = None
                     print(f"Tracking ticker: {ticker}")
 
             except asyncio.TimeoutError:
@@ -126,23 +126,23 @@ async def websocket_endpoint(websocket: WebSocket):
 
             # Fetch stock price for the current ticker
             if ticker:
-                price = fetch_stock_price(ticker)
+                latest_intraday_price = fetch_stock_price(ticker)
 
-                if price:
-                    change_percent = ((price - prev_price) / prev_price) * 100 if prev_price else 0
+                if latest_intraday_price:
+                    change_percent = ((latest_intraday_price - prev_intraday_price) / prev_intraday_price) * 100 if prev_intraday_price else 0
                     direction = "up" if change_percent > 0 else "down" if change_percent < 0 else "neutral"
-                    prev_price = price
+                    prev_intraday_price = latest_intraday_price
 
                     # Fetch additional stock details
                     stock_details = await get_stock_details(ticker)
 
                     stock_data = {
                         "ticker": ticker,
-                        "price": round(price, 2),
+                        "latest_intraday_price": round(latest_intraday_price, 2),
                         "change_percent": round(change_percent, 2),
                         "direction": direction,
                         "name": stock_details["name"],
-                        "current_price": stock_details["current_price"],
+                        "prev_closing_price": stock_details["prev_closing_price"],
                         "open_price": stock_details["open_price"],
                         "high_price": stock_details["high_price"],
                         "low_price": stock_details["low_price"],
@@ -200,7 +200,7 @@ async def get_stock_details(ticker: str):
         stock_details = {
             "ticker": ticker,
             "name": overview_data.get("Name", "N/A"),
-            "current_price": latest_prices["4. close"],
+            "prev_closing_price": latest_prices["4. close"],
             "open_price": latest_prices["1. open"],
             "high_price": latest_prices["2. high"],
             "low_price": latest_prices["3. low"],

@@ -6,13 +6,11 @@ import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend);
 
 const StockDetailModal = ({ stock, onClose }) => {
-  if (!stock) return null; // Ensure stock exists before rendering
+  if (!stock) return null;
   console.log("Stock:", stock);
 
-  // Ensure price_history exists and is an array
   const priceHistory = Array.isArray(stock.price_history) ? stock.price_history : [];
 
-  // Prepare chart data safely
   const chartData = {
     labels: priceHistory.map((entry) => entry.date).reverse(), // X-axis (Dates)
     datasets: [
@@ -31,7 +29,7 @@ const StockDetailModal = ({ stock, onClose }) => {
       <div className="modal-content">
         <button className="close-btn" onClick={onClose}>×</button>
         <h2>{stock.name} ({stock.ticker})</h2>
-        <p><strong>Current Price:</strong> ${stock.current_price ?? "N/A"}</p>
+        <p><strong>Current Price:</strong> ${stock.prev_closing_price ?? "N/A"}</p>
         <p><strong>Opening Price:</strong> ${stock.open_price ?? "N/A"}</p>
         <p><strong>High:</strong> ${stock.high_price ?? "N/A"} | <strong>Low:</strong> ${stock.low_price ?? "N/A"}</p>
         <p><strong>Market Cap:</strong> ${stock.market_cap ?? "N/A"}</p>

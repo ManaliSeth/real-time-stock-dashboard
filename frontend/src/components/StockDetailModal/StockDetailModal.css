@@ -1,61 +1,60 @@
 /* Fullscreen overlay to blur the background */
 .modal-overlay {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: rgba(0, 0, 0, 0.6); /* Dark overlay */
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    z-index: 1000; /* Ensure modal is on top */
-  }
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
   
-  /* Modal box */
-  .modal-content {
-    background: white;
-    padding: 20px;
-    width: 60%;
-    max-width: 600px;
-    max-height: 80vh; /* Make modal fit in viewport */
-    overflow-y: auto; /* Enable scrolling if content overflows */
-    border-radius: 10px;
-    box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.2);
-    text-align: center;
-    position: relative;
-  }
-  
-  /* Close button */
-  .close-btn {
-    position: absolute;
-    top: 10px;
-    right: 15px;
-    font-size: 24px;
-    background: none;
-    border: none;
-    cursor: pointer;
-  }
-  
-  /* Chart container to ensure proper sizing */
-  .chart-container {
-    width: 100%;
-    max-height: 300px;
-    overflow: hidden; /* Prevent overflowing content */
-    margin-top: 20px;
-  }
-  
-  /* Ensure modal content is scrollable */
-  .modal-content::-webkit-scrollbar {
-    width: 8px;
-  }
-  
-  .modal-content::-webkit-scrollbar-thumb {
-    background-color: #4b9cd3;
-    border-radius: 4px;
-  }
-  
-  .modal-content::-webkit-scrollbar-track {
-    background: #f1f1f1;
-  }
-  
+/* Modal box */
+.modal-content {
+  background: white;
+  padding: 20px;
+  width: 60%;
+  max-width: 600px;
+  max-height: 80vh; 
+  overflow-y: auto;
+  border-radius: 10px;
+  box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.2);
+  text-align: center;
+  position: relative;
+}
+
+/* Close button */
+.close-btn {
+  position: absolute;
+  top: 10px;
+  right: 15px;
+  font-size: 24px;
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+/* Chart container to ensure proper sizing */
+.chart-container {
+  width: 100%;
+  max-height: 300px;
+  overflow: hidden;
+  margin-top: 20px;
+}
+
+/* Ensure modal content is scrollable */
+.modal-content::-webkit-scrollbar {
+  width: 8px;
+}
+
+.modal-content::-webkit-scrollbar-thumb {
+  background-color: #4b9cd3;
+  border-radius: 4px;
+}
+
+.modal-content::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}

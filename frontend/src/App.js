@@ -106,6 +106,7 @@ const App = () => {
       },1000); // 1000ms debounce time
     } else {
       setSearchResults([]);
+      setIsTyping(false);
     }
   }, [isTracking]);
 
@@ -171,7 +172,7 @@ const App = () => {
           onChange={handleSearchChange}
           placeholder="Search stock by ticker (e.g., AAPL)"
         />
-        {searchResults.length > 0 && !isTracking &&(
+        {searchResults.length > 0 && isTyping && !isTracking &&(
           <div className="search-suggestions">
             {searchResults.map((result) => (
               <div
